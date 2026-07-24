@@ -495,22 +495,57 @@ const catLabel=k=>catE(k).split(' ')[1]||'기타';
 const CAT_ICON={school:'notebook',play:'target',env:'pot',safe:'shield',life:'house',ai:'robot',etc:'bulb'};
 function statusOf(g){return g>=100?{n:'완성',c:'st-done'}:g>=40?{n:'성장중',c:'st-grow'}:{n:'아이디어',c:'st-idea'};}
 
-let notes=[
+/* ================= 데이터 저장소 (브라우저 localStorage) =================
+   notes / gallery / liked / nextId 를 브라우저에 저장해 새로고침해도 유지됩니다.
+   처음 방문(저장된 데이터 없음)에는 아래 기본 예시가 들어갑니다.               */
+const STORE_KEY='ideanote.v1';
+
+const DEFAULT_NOTES=[
   {id:1,text:'급식 남은 반찬을 재밌게 나눠먹는 스마트 배식판',cat:'school',grow:100,ai:5,date:'7월 22일'},
   {id:2,text:'오래 걸으면 응원해주는 소리나는 신발',cat:'play',grow:60,ai:2,date:'7월 21일'},
   {id:3,text:'물 줄 때를 알려주는 스마트 화분',cat:'env',grow:45,ai:4,date:'7월 20일'},
   {id:4,text:'교실 문에 손 안 대고 여는 발판 장치',cat:'safe',grow:20,ai:1,date:'7월 18일'},
 ];
-let selCat='life',nextId=5,sortMode='new';
-
-let gallery=[
+const DEFAULT_GALLERY=[
   {title:'오래 걸으면 응원해주는 소리나는 신발',cat:'play',likes:24,cmt:6,icon:'target',bg:'#FFF0D6'},
   {title:'물 줄 때를 알려주는 스마트 화분',cat:'env',likes:18,cmt:4,icon:'pot',bg:'#E8F7DC'},
   {title:'급식 남은 반찬 재밌게 나눠먹는 배식판',cat:'school',likes:32,cmt:9,icon:'notebook',bg:'#FFE7E0'},
   {title:'비 안 맞게 알려주는 우산 알림이',cat:'life',likes:15,cmt:3,icon:'house',bg:'#E3EEFF'},
   {title:'친구를 찾아주는 반짝이 이름표',cat:'safe',likes:21,cmt:5,icon:'shield',bg:'#F1E8FF'},
 ];
-let liked=new Set();
+
+let notes, gallery, liked, nextId;
+let selCat='life',sortMode='new';
+
+// 깊은 복사(기본값을 그대로 쓰면 원본이 함께 수정됨)
+const clone=v=>JSON.parse(JSON.stringify(v));
+
+function loadState(){
+  try{
+    const raw=localStorage.getItem(STORE_KEY);
+    if(raw){
+      const s=JSON.parse(raw);
+      notes=Array.isArray(s.notes)?s.notes:clone(DEFAULT_NOTES);
+      gallery=Array.isArray(s.gallery)?s.gallery:clone(DEFAULT_GALLERY);
+      liked=new Set(Array.isArray(s.liked)?s.liked:[]);
+      nextId=Number.isInteger(s.nextId)?s.nextId:notes.reduce((m,n)=>Math.max(m,n.id),0)+1;
+      return;
+    }
+  }catch(e){console.warn('저장된 데이터를 불러오지 못했어요. 기본값으로 시작합니다.',e);}
+  // 저장된 데이터가 없거나 손상된 경우: 기본 예시로 시작
+  notes=clone(DEFAULT_NOTES);
+  gallery=clone(DEFAULT_GALLERY);
+  liked=new Set();
+  nextId=notes.reduce((m,n)=>Math.max(m,n.id),0)+1;
+}
+
+function saveState(){
+  try{
+    localStorage.setItem(STORE_KEY,JSON.stringify({notes,gallery,liked:[...liked],nextId}));
+  }catch(e){console.warn('데이터를 저장하지 못했어요.',e);}
+}
+
+loadState();
 
 const MENU=[
   {i:'sprout',t:'나의 성장 기록',r:''},{i:'medal',t:'아이디어 뱃지',r:'12개'},
@@ -558,7 +593,7 @@ randomPH();setInterval(()=>{if(document.activeElement!==ta)randomPH();},2600);
 /* ---------- 저장 ---------- */
 document.getElementById('saveBtn').onclick=()=>{const v=ta.value.trim();if(!v){ta.focus();ta.style.borderColor='var(--accent)';toast('한 줄이라도 적어볼까요? ✍️');return;}
   const d=new Date();notes.unshift({id:nextId++,text:v,cat:selCat,grow:5,ai:0,date:(d.getMonth()+1)+'월 '+d.getDate()+'일'});
-  ta.value='';randomPH();fireConfetti();toast('생각을 담았어요! 경험치 +10 ✨');renderRecent();updateStats();};
+  ta.value='';randomPH();fireConfetti();toast('생각을 담았어요! 경험치 +10 ✨');renderRecent();updateStats();saveState();};
 function fireConfetti(){if(typeof confetti!=='function')return;confetti({particleCount:90,spread:70,origin:{y:.8},colors:['#FFC83D','#98E63D','#FF8A3D','#FFE6A0']});setTimeout(()=>confetti({particleCount:50,angle:60,spread:55,origin:{x:0,y:.8}}),150);setTimeout(()=>confetti({particleCount:50,angle:120,spread:55,origin:{x:1,y:.8}}),150);}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
 
@@ -580,7 +615,7 @@ function growNote(id){const n=notes.find(x=>x.id==id);if(!n)return;if(n.grow>=10
   n.grow=Math.min(100,n.grow+20);
   if(n.grow>=100){fireConfetti();toast('🏆 아이디어 완성! 전시관에 올라갔어요');if(!gallery.some(g=>g.title===n.text))gallery.unshift({title:n.text,cat:n.cat,likes:0,cmt:0,icon:CAT_ICON[n.cat],bg:'#FFF3D6',mine:true});}
   else toast('생각이 자랐어요! 🌱 '+n.grow+'%');
-  renderRecent();renderNotes();updateStats();}
+  renderRecent();renderNotes();updateStats();saveState();}
 
 /* ---------- AI ---------- */
 function fillPicker(){const s=document.getElementById('ideaPick');s.innerHTML='';if(!notes.length){const o=document.createElement('option');o.textContent='먼저 생각을 하나 적어 주세요';o.disabled=true;s.appendChild(o);return;}notes.forEach(n=>{const o=document.createElement('option');o.value=n.id;o.textContent=n.text.length>26?n.text.slice(0,26)+'…':n.text;s.appendChild(o);});}
@@ -595,12 +630,97 @@ const qwrap=document.getElementById('qtypes');
 QTYPES.forEach((t,i)=>{const b=document.createElement('button');b.className='qtype '+t.cls;b.innerHTML=`<span class="qe">${icon(t.key)}</span>${t.label}`;b.onclick=()=>askAI(i);qwrap.appendChild(b);});
 document.getElementById('qrandom').onclick=()=>askAI(Math.floor(Math.random()*QTYPES.length));
 function askAI(i){const s=document.getElementById('ideaPick');if(!s.value){toast('먼저 아이디어를 골라주세요 🙂');return;}const n=notes.find(x=>x.id==s.value),t=QTYPES[i];const out=document.getElementById('aiOut'),body=document.getElementById('aiBody');out.classList.add('show');body.innerHTML='<span class="thinking">아이디어 코치가 생각하는 중 <span class="dot">●</span><span class="dot">●</span><span class="dot">●</span></span>';
-  setTimeout(()=>{body.innerHTML=`<div style="font-weight:700;color:#5a4636;margin-bottom:6px;">고른 생각 👉 <b>${esc(n.text)}</b></div><div class="qtype ${t.cls}" style="cursor:default;box-shadow:none;margin:8px 0;"><span class="qe">${icon(t.key)}</span>${t.label}</div><div style="font-weight:600;">${t.ans}</div><div style="font-weight:800;margin-top:12px;">${icon('target')} 미션</div><ul><li>떠오른 답을 <b>한 줄</b>이라도 노트에 적어보기</li><li>아이디어에 <b>재미있는 이름</b> 붙이기</li></ul>`;if(n){n.ai++;n.grow=Math.min(100,n.grow+8);}updateStats();},1100);}
+  setTimeout(()=>{body.innerHTML=`<div style="font-weight:700;color:#5a4636;margin-bottom:6px;">고른 생각 👉 <b>${esc(n.text)}</b></div><div class="qtype ${t.cls}" style="cursor:default;box-shadow:none;margin:8px 0;"><span class="qe">${icon(t.key)}</span>${t.label}</div><div style="font-weight:600;">${t.ans}</div><div style="font-weight:800;margin-top:12px;">${icon('target')} 미션</div><ul><li>떠오른 답을 <b>한 줄</b>이라도 노트에 적어보기</li><li>아이디어에 <b>재미있는 이름</b> 붙이기</li></ul>`;if(n){n.ai++;n.grow=Math.min(100,n.grow+8);}updateStats();saveState();},1100);}
 
-/* ---------- URL ---------- */
-document.getElementById('summarize').onclick=()=>{const url=document.getElementById('urlInput').value.trim();const out=document.getElementById('urlOut'),body=document.getElementById('urlBody');if(!url){document.getElementById('urlInput').focus();return;}out.classList.add('show');body.innerHTML='<span class="thinking">AI가 링크를 읽는 중 <span class="dot">●</span><span class="dot">●</span><span class="dot">●</span></span>';
-  setTimeout(()=>{const t=guessTopic(url);body.innerHTML=`<div style="font-weight:800;margin-bottom:4px;">📄 이런 내용이에요</div><div style="font-weight:600;color:#5a4636;">${t.summary}</div><div style="font-weight:800;margin:12px 0 2px;">🔑 핵심 3가지</div><ul>${t.points.map(p=>`<li>${p}</li>`).join('')}</ul><div style="font-weight:800;margin:12px 0 2px;">💡 여기서 자랄 수 있는 아이디어</div><ul>${t.ideas.map(p=>`<li>${p}</li>`).join('')}</ul><button class="btn-mini" id="u2n" style="margin-top:12px;">📌 이 생각 노트에 담기</button>`;
-    document.getElementById('u2n').onclick=()=>{const d=new Date();notes.unshift({id:nextId++,text:'('+t.tag+') '+t.ideas[0],cat:'ai',grow:5,ai:0,date:(d.getMonth()+1)+'월 '+d.getDate()+'일'});toast('노트에 담았어요! 📌');updateStats();document.getElementById('u2n').textContent='📌 담았어요!';};},1200);};
+/* ================= URL 요약: 실제 AI API 연동 구조 =================
+   ▸ 실제 AI 서버에 연결하려면 AI_CONFIG.endpoint 를 여러분의 백엔드 주소로 바꾸세요.
+   ▸ 보안상 API 키(예: Claude API 키)는 브라우저에 두면 안 되고, 반드시 서버(프록시)에
+     보관해야 합니다. 브라우저 → 내 서버 → AI 제공자 순서로 요청이 흐르는 구조입니다.
+   ▸ 서버는 { url } 를 받아 아래 형태의 JSON 을 돌려주면 됩니다:
+       { "tag":"영상", "summary":"...", "points":["...","...","..."], "ideas":["...","..."] }
+   ▸ endpoint 가 비어 있으면(기본값) 자동으로 로컬 데모 요약(guessTopic)을 사용합니다.
+
+   [서버 예시 - Node/Express + Claude API]
+   app.post('/api/summarize', async (req, res) => {
+     const { url } = req.body;
+     const r = await fetch('https://api.anthropic.com/v1/messages', {
+       method: 'POST',
+       headers: {
+         'x-api-key': process.env.ANTHROPIC_API_KEY,   // 키는 서버 환경변수에만!
+         'anthropic-version': '2023-06-01',
+         'content-type': 'application/json',
+       },
+       body: JSON.stringify({
+         model: 'claude-opus-4-8',
+         max_tokens: 700,
+         messages: [{ role: 'user', content:
+           `초등학생 눈높이로 이 링크를 요약해줘: ${url}\n` +
+           `반드시 아래 JSON 만 출력: {"tag","summary","points":[3개],"ideas":[2~3개]}` }],
+       }),
+     });
+     const data = await r.json();
+     res.json(JSON.parse(data.content[0].text));   // 모델이 만든 JSON 그대로 전달
+   });                                                                            */
+const AI_CONFIG={
+  endpoint:'',        // 예) 'https://your-server.com/api/summarize' — 비우면 데모 사용
+  timeoutMs:15000,    // 응답이 이 시간을 넘으면 요청을 취소
+};
+
+// 실제 AI API 호출(엔드포인트 미설정 시 데모로 자동 대체). 항상 {tag,summary,points,ideas} 반환.
+async function aiSummarize(url){
+  if(!AI_CONFIG.endpoint) return guessTopic(url);   // 연결된 서버가 없으면 데모
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),AI_CONFIG.timeoutMs);
+  try{
+    const res=await fetch(AI_CONFIG.endpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url}),
+      signal:ctrl.signal,
+    });
+    if(!res.ok) throw new Error('요약 서버 오류 HTTP '+res.status);
+    return normalizeSummary(await res.json(),url);
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+// API 응답을 화면이 기대하는 형태로 정리(빠진 항목은 데모 값으로 안전하게 채움)
+function normalizeSummary(data,url){
+  const fb=guessTopic(url);
+  return {
+    tag:data.tag||fb.tag,
+    summary:data.summary||fb.summary,
+    points:Array.isArray(data.points)&&data.points.length?data.points:fb.points,
+    ideas:Array.isArray(data.ideas)&&data.ideas.length?data.ideas:fb.ideas,
+  };
+}
+
+// 요약 결과를 카드 HTML 로 렌더링
+function renderSummary(t){
+  return `<div style="font-weight:800;margin-bottom:4px;">📄 이런 내용이에요</div><div style="font-weight:600;color:#5a4636;">${esc(t.summary)}</div><div style="font-weight:800;margin:12px 0 2px;">🔑 핵심 3가지</div><ul>${t.points.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><div style="font-weight:800;margin:12px 0 2px;">💡 여기서 자랄 수 있는 아이디어</div><ul>${t.ideas.map(p=>`<li>${esc(p)}</li>`).join('')}</ul><button class="btn-mini" id="u2n" style="margin-top:12px;">📌 이 생각 노트에 담기</button>`;
+}
+
+document.getElementById('summarize').onclick=async ()=>{
+  const url=document.getElementById('urlInput').value.trim();
+  const out=document.getElementById('urlOut'),body=document.getElementById('urlBody'),btn=document.getElementById('summarize');
+  if(!url){document.getElementById('urlInput').focus();return;}
+  out.classList.add('show');btn.disabled=true;
+  body.innerHTML='<span class="thinking">AI가 링크를 읽는 중 <span class="dot">●</span><span class="dot">●</span><span class="dot">●</span></span>';
+  let t;
+  try{
+    t=await aiSummarize(url);
+  }catch(e){
+    console.warn('요약을 불러오지 못했어요.',e);
+    body.innerHTML='<div style="font-weight:700;color:#c0532a;">앗, AI 요약을 불러오지 못했어요 😢</div><div style="font-weight:500;color:#7a7a7a;margin-top:4px;">잠시 후 다시 시도해 주세요.</div>';
+    btn.disabled=false;return;
+  }
+  btn.disabled=false;
+  body.innerHTML=renderSummary(t);
+  document.getElementById('u2n').onclick=()=>{const d=new Date();notes.unshift({id:nextId++,text:'('+t.tag+') '+t.ideas[0],cat:'ai',grow:5,ai:0,date:(d.getMonth()+1)+'월 '+d.getDate()+'일'});toast('노트에 담았어요! 📌');updateStats();saveState();document.getElementById('u2n').textContent='📌 담았어요!';};
+};
+
+// 로컬 데모 요약(API 미연결 시 사용). 실제 서버 응답과 동일한 형태를 반환.
 function guessTopic(url){const u=url.toLowerCase(),has=(...k)=>k.some(x=>u.includes(x));if(has('youtube','youtu.be','video'))return{tag:'영상',summary:'재미있는 과학·만들기 영상이에요. AI가 핵심을 짧게 정리했어요.',points:['어떤 문제를 해결하는지','만드는 과정','응용 방법'],ideas:['우리 교실 문제에 적용해 보기','더 쉽고 안전한 나만의 버전 만들기']};if(has('news','뉴스','article'))return{tag:'뉴스',summary:'최근 일어난 일과 이유를 어린이 눈높이로 정리했어요.',points:['무슨 일이 있었는지','왜 중요한지','우리 생활과의 관련'],ideas:['불편함을 해결하는 도구 상상하기','사람을 돕는 새 물건 떠올리기']};if(has('환경','eco','green','plastic','기후'))return{tag:'환경',summary:'지구를 지키는 방법에 대한 내용이에요.',points:['왜 환경을 지켜야 하는지','우리가 할 실천','기술로 돕는 방법'],ideas:['똑똑한 분리수거함','물·전기를 아껴주는 장치']};return{tag:'참고자료',summary:'링크의 핵심 내용을 AI가 짧게 정리했어요. (데모 예시)',points:['다루는 주제','가장 중요한 한 가지','새롭게 알게 되는 점'],ideas:['우리 반을 도울 방법 찾기','불편함을 해결하는 아이디어 스케치']};}
 
 /* ---------- 전시관 ---------- */
@@ -610,7 +730,7 @@ const fwrap=document.getElementById('filters');
 FILTERS.forEach(f=>{const b=document.createElement('button');b.className='filter'+(f.k==='all'?' on':'');b.textContent=f.e;b.onclick=()=>{curFilter=f.k;document.querySelectorAll('#filters .filter').forEach((el,i)=>el.classList.toggle('on',FILTERS[i].k===curFilter));renderGallery();};fwrap.appendChild(b);});
 function renderGallery(){const g=document.getElementById('gal');const list=gallery.filter(x=>curFilter==='all'||x.cat===curFilter);
   g.innerHTML=list.length?list.map(x=>{const idx=gallery.indexOf(x);const isLiked=liked.has(idx);return `<div class="gcard"><div class="gthumb" style="background:${x.bg}">${icon(x.icon)}</div><div class="gin"><div class="gtitle">${esc(x.title)}</div><div class="gfoot"><span class="like" data-i="${idx}">${isLiked?icon('heart'):'🤍'} ${x.likes}</span><span>${icon('chat')} ${x.cmt}</span><span class="gtag">${catLabel(x.cat)}</span></div></div></div>`;}).join(''):'<div class="empty" style="column-span:all;">이 카테고리엔 아직 아이디어가 없어요.</div>';
-  g.querySelectorAll('.like').forEach(el=>el.onclick=e=>{e.stopPropagation();const i=+el.dataset.i;if(liked.has(i)){liked.delete(i);gallery[i].likes--;}else{liked.add(i);gallery[i].likes++;}renderGallery();});}
+  g.querySelectorAll('.like').forEach(el=>el.onclick=e=>{e.stopPropagation();const i=+el.dataset.i;if(liked.has(i)){liked.delete(i);gallery[i].likes--;}else{liked.add(i);gallery[i].likes++;}renderGallery();saveState();});}
 
 /* ---------- 마이 메뉴 ---------- */
 document.getElementById('myMenu').innerHTML=MENU.map(m=>`<div class="mrow"><span class="mi">${icon(m.i)}</span>${m.t}<span class="mr">${m.r?m.r+' ':''}<span class="chev">›</span></span></div>`).join('');
